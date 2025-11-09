@@ -1,0 +1,68 @@
+/* Scriptly - Improved Dark Theme (QSS)
+   Purpose: centralized stylesheet for the editor's dark theme. Kept minimal but refined.
+   Uses: applied as the only available theme (dark-only).
+*/
+
+/* Base window */
+QMainWindow {
+    background-color: #0f1720; /* slightly bluish dark */
+    color: #e6eef6;
+}
+
+/* Menubar & Menus */
+QMenuBar {
+    background-color: #0f1720;
+    color: #e6eef6;
+    border-bottom: 1px solid #1f2a35;
+}
+QMenuBar::item:selected { background: rgba(255,255,255,0.03); }
+QMenu { background-color: #111827; color: #e6eef6; border: 1px solid #1f2a35; }
+QMenu::item:selected { background: rgba(255,255,255,0.04); }
+
+/* Toolbars & Buttons */
+QToolBar { background: transparent; spacing: 6px; padding: 4px; border: none; }
+QToolButton { background: transparent; color: #e6eef6; border: 1px solid transparent; padding: 6px; border-radius: 4px; }
+QToolButton:hover { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.03); }
+
+/* Dock widgets */
+QDockWidget { background: #0b1116; border: 1px solid #12202a; }
+QDockWidget::title { background: transparent; padding: 8px; color: #cfe8ff; }
+
+/* Tree view (file browser) */
+QTreeView { background: #071018; color: #dceffc; border: 1px solid #12202a; }
+QTreeView::item { padding: 4px 8px; }
+QTreeView::item:selected { background: rgba(0,122,204,0.12); color: #ffffff; }
+
+/* Tabs */
+QTabBar::tab { background: transparent; color: #d8eaf7; padding: 8px 12px; margin: 0 4px; }
+QTabBar::tab:selected { background: #071826; border-bottom: 2px solid #0ea5e9; }
+QTabBar::tab:hover { background: rgba(255,255,255,0.02); }
+QTabBar::close-button { image: none; }
+
+/* Editors (QsciScintilla handled separately) */
+QWidget[editor="true"] { background-color: #07121a; color: #dbeefd; border: 1px solid #12202a; }
+
+/* Dialogs and forms */
+QDialog, QMessageBox { background: #0f1720; color: #e6eef6; }
+QLineEdit, QTextEdit, QPlainTextEdit { background: transparent; color: #e6eef6; border: 1px solid #1b2a34; padding: 6px; border-radius: 4px; }
+QComboBox, QSpinBox { background: transparent; color: #e6eef6; border: 1px solid #1b2a34; padding: 4px 6px; border-radius: 4px; }
+
+/* Buttons */
+QPushButton { background: #0f2740; color: #e6eef6; border: 1px solid #164256; padding: 6px 10px; border-radius: 6px; }
+QPushButton:hover { background: #0f3a60; }
+
+/* Status bar */
+QStatusBar { background: #07121a; color: #bfe6ff; border-top: 1px solid #12202a; }
+
+/* Scrollbars: slim */
+QScrollBar:vertical { width: 10px; background: transparent; }
+QScrollBar::handle:vertical { background: rgba(255,255,255,0.06); border-radius: 6px; min-height: 20px; }
+
+/* subtle focus outlines */
+*:focus { outline: 2px solid rgba(14,165,233,0.12); outline-offset: 0px; }
+
+/* Language token color hints (used by lexers where possible) */
+/* These are hints; QScintilla lexers will be configured separately to match */
+/* keyword: #61aeee, string: #ecc48d, comment: #6aa97b */
+
+/* END dark theme */

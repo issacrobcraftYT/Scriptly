@@ -1,0 +1,14 @@
+{
+  "name": "dark",
+  "editor_background": "#07121a",
+  "editor_foreground": "#dbeefd",
+  "editor_selection": "#0ea5e9",
+  "editor_line": "#12202a",
+  "line_number": "#858585",
+  "keyword": "#61aeee",
+  "string": "#ecc48d",
+  "comment": "#6aa97b",
+  "background": "#0f1720",
+  "foreground": "#e6eef6",
+  "selection": "#0ea5e9"
+}

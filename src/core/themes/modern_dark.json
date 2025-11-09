@@ -1,0 +1,15 @@
+{
+  "name": "modern_dark",
+  "editor_background": "#151a20",
+  "editor_foreground": "#e6eef6",
+  "editor_selection": "rgba(14, 165, 233, 0.2)",
+  "editor_line": "#1a1f25",
+  "line_number": "#8ba1b5",
+  "keyword": "#0ea5e9",
+  "string": "#ecc48d",
+  "comment": "#6aa97b",
+  "background": "#1a1f25",
+  "foreground": "#e6eef6",
+  "selection": "rgba(14, 165, 233, 0.2)",
+  "accent": "#0ea5e9"
+}

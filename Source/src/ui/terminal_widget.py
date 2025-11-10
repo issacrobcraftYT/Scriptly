@@ -24,6 +24,7 @@ class TerminalWidget(QWidget):
         self.process.finished.connect(self._on_finished)
 
         self._setup_ui()
+        self._ansi_escape = re.compile(r'(\x9B|\x1B\[)[0-?]*[ -\/]*[@-~]')
         self.start_shell()
 
     def set_font(self, qfont):
@@ -94,19 +95,60 @@ class TerminalWidget(QWidget):
             # If user has scrolled up, do not force scroll; otherwise append and scroll to bottom
             at_bottom = not self._user_scrolled_up
             if at_bottom:
-                self.output.moveCursor(QTextCursor.End)
+                self.output.moveCursor(QTextCursor.MoveOperation.End)
             # Use insertHtml to preserve simple styling
             self.output.insertHtml(html.replace('\n', '<br/>'))
             if at_bottom:
-                QTimer.singleShot(0, lambda: self.output.verticalScrollBar().setValue(self.output.verticalScrollBar().maximum()))
+                self.output.moveCursor(QTextCursor.MoveOperation.End)
+        except Exception as e:
+            self.output.append(f"\nError displaying output: {e}\n")
+    def _on_scrollbar_value_changed(self, value):
+        sb = self.output.verticalScrollBar()
+        # Mark as user-scrolled if not at bottom
+        self._user_scrolled_up = value < sb.maximum()
+        
+    def _send_command(self):
+        command = self.input.text().strip()
+        if not command:
+            return
+            
+        # Write command to output
+        self.output.moveCursor(QTextCursor.MoveOperation.End)
+        self.output.insertHtml(f'<br/><span style="color: #9CDCFE">&gt; {command}</span><br/>')
+        
+        # Clear input and write command to process
+        self.input.clear()
+        try:
+            self.process.write(f"{command}\n".encode())
+        except Exception as e:
+            self.output.append(f"\nError sending command: {e}\n")
+            
+    def _on_finished(self, exitCode, exitStatus):
+        try:
+            if exitCode != 0:
+                self.output.append(f"\nProcess exited with code {exitCode}\n")
+            self.closed.emit()
         except Exception:
-            # fallback to plain text insert
-            try:
-                if not getattr(self, '_user_scrolled_up', False):
-                    self.output.moveCursor(QTextCursor.End)
-                self.output.insertPlainText(data)
-            except Exception:
-                pass
+            pass
+            
+    def kill(self):
+        """Terminate the process when closing the terminal."""
+        try:
+            self.process.kill()
+        except Exception:
+            pass
+            
+    def _ansi_to_html(self, text: str) -> str:
+        """Convert ANSI color escape sequences to HTML."""
+        # Remove ANSI escape sequences we don't handle
+        text = self._ansi_escape.sub('', text)
+
+        # Replace special characters
+        text = text.replace('&', '&amp;')
+        text = text.replace('<', '&lt;')
+        text = text.replace('>', '&gt;')
+
+        return text
 
     def _send_command(self):
         cmd = self.input.text()

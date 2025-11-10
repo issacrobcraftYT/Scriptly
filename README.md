@@ -1,6 +1,18 @@
-# Scriptly
+<div align="center">
 
-Scriptly is a modern, feature-rich text editor built with Python and PyQt6, designed to provide a VS Code-like experience for developers.
+# 🌙 Scriptly  
+### A modern, minimal & customizable code editor built with Python + PyQt6  
+
+![Scriptly Logo](https://i.imgur.com/ABCD123.png) 
+
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)]()
+[![License](https://img.shields.io/badge/license-MIT-green.svg)]()
+[![Python](https://img.shields.io/badge/python-3.10%2B-yellow.svg)]()
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20Mac-lightgrey.svg)]()
+
+</div>
+
+---
 
 ## Features
 

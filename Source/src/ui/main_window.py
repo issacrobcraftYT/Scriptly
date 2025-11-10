@@ -8,6 +8,10 @@ from .settings_dialog import SettingsDialog
 from .terminal_widget import TerminalWidget
 from .find_in_files import FindInFilesDialog
 from .utils.animations import fade_in, slide_widget
+from .utils.ui_utils import make_close_icon, format_line_col
+from .main_file_browser import create_file_browser
+from .main_statusbar import setup_status_bar as create_status_bar
+from .welcome import WelcomeWidget
 from core.settings import Settings
 from core.theme_manager import ThemeManager
 from core.file_monitor import FileMonitor
@@ -25,7 +29,9 @@ class MainWindow(QMainWindow):
         self.setup_ui()
         self.setup_menubar()
         self.setup_shortcuts()
-        self.setup_file_browser()
+    # Do not create a file browser or open a default directory on startup.
+    # The file browser will be created when the user opens a workspace via
+    # File -> Open Folder as Workspace or when they toggle the file browser.
         self.setup_status_bar()
         # Set initial theme before showing window
         self.apply_theme()
@@ -48,52 +54,45 @@ class MainWindow(QMainWindow):
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
         fade_in(self.main_splitter, duration=500)
         
-        # Create tab widget for multiple files
-        self.tab_widget = QTabWidget()
+        # Create modern tab widget for multiple files
+        from .utils.modern_tabs import ModernTabWidget
+        self.tab_widget = ModernTabWidget()
         self.tab_widget.setTabsClosable(True)
-        self.tab_widget.setDocumentMode(True)  # Modern flat look
-        self.tab_widget.setMovable(True)  # Allow tab reordering
+        self.tab_widget.setMovable(True)
         self.tab_widget.tabCloseRequested.connect(self.close_tab)
         self.tab_widget.currentChanged.connect(self.update_status_bar)
+        
+        # Apply modern styling to the main window
+        self.setStyleSheet("""
+            QMainWindow {
+                background: palette(window);
+            }
+            QSplitter::handle {
+                background: palette(mid);
+            }
+            QStatusBar {
+                background: palette(window);
+                border-top: 1px solid palette(mid);
+            }
+            QMenuBar {
+                background: transparent;
+                border-bottom: 1px solid palette(mid);
+            }
+        """)
         
         # Customize tab bar
         tab_bar = self.tab_widget.tabBar()
         tab_bar.setExpanding(False)  # Fixed tab width
         tab_bar.setDrawBase(False)  # Remove bottom line
         
-        from PyQt6.QtGui import QPainter, QPixmap, QIcon, QColor, QPen
-        
-        def _make_x_icon(size=12, color=QColor(30, 30, 30)):
-            pm = QPixmap(size, size)
-            pm.fill(Qt.GlobalColor.transparent)
-
-            # Use QPainter initialized with the pixmap to avoid separate begin()/end() race
-            painter = QPainter(pm)
-            try:
-                if painter.isActive():
-                    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-                    pen = QPen(color)
-                    pen.setWidth(2)
-                    painter.setPen(pen)
-                    painter.drawLine(3, 3, size - 4, size - 4)
-                    painter.drawLine(size - 4, 3, 3, size - 4)
-                else:
-                    # painter failed to become active; return an empty icon
-                    print("Warning: QPainter failed to initialize for icon drawing")
-            finally:
-                if painter.isActive():
-                    painter.end()
-
-            return QIcon(pm)
-            
         try:
-            self._close_icon = _make_x_icon(12, QColor(30, 30, 30))
+            # Use shared utility to build the close icon
+            self._close_icon = make_close_icon(12)
             # apply a lightweight stylesheet so the close button 'lights up' on hover
             self.tab_widget.setStyleSheet("""
                 QTabBar::close-button { border: 0px; margin: 2px; padding: 2px; }
                 QTabBar::close-button:hover { background: rgba(255, 255, 255, 0.1); }
             """)
-            # when tabs are added we'll set a close button widget per-tab that uses this icon
         except Exception:
             self._close_icon = None
         
@@ -101,8 +100,38 @@ class MainWindow(QMainWindow):
         self.main_splitter.addWidget(self.tab_widget)
         self.setCentralWidget(self.main_splitter)
         
-        # Create first editor tab
-        self.new_file()
+        # Create welcome tab in place of an initial empty editor
+        try:
+            self.create_welcome_tab()
+        except Exception:
+            # fallback: create an empty editor if welcome cannot be shown
+            self.new_file()
+
+    def create_welcome_tab(self):
+        """Add a persistent welcome tab that provides instructions and quick actions."""
+        # Avoid creating multiple welcome tabs
+        for i in range(self.tab_widget.count()):
+            w = self.tab_widget.widget(i)
+            if isinstance(w, WelcomeWidget):
+                return
+        welcome = WelcomeWidget(recent=getattr(self.settings, 'workspace', {}).get('recent', []))
+        welcome.open_folder.connect(self.open_folder)
+        welcome.new_file.connect(self.new_file)
+        idx = self.tab_widget.addTab(welcome, "Welcome")
+        # ensure tab uses modern look
+        try:
+            self.tab_widget.setCurrentIndex(idx)
+        except Exception:
+            pass
+
+    def remove_welcome_tab(self):
+        for i in range(self.tab_widget.count()-1, -1, -1):
+            w = self.tab_widget.widget(i)
+            if isinstance(w, WelcomeWidget):
+                try:
+                    self.tab_widget.removeTab(i)
+                except Exception:
+                    pass
 
     def closeEvent(self, event):
         # Prompt to save unsaved changes before quitting
@@ -163,6 +192,12 @@ class MainWindow(QMainWindow):
 
         # File Menu (trimmed to match requested layout)
         file_menu = menubar.addMenu("&File")
+        # Open folder as workspace
+        open_folder_action = file_menu.addAction("Open Folder as Workspace")
+        open_folder_action.triggered.connect(self.open_folder)
+        open_folder_action.setShortcut("Ctrl+K, Ctrl+O")
+        file_menu.addSeparator()
+        
         # Save current file
         save_action = file_menu.addAction("Save")
         save_action.triggered.connect(self.save_file)
@@ -269,6 +304,17 @@ class MainWindow(QMainWindow):
         
         # Fade in the window
         QTimer.singleShot(50, lambda: fade_in(self, duration=300))
+
+        # If there is no workspace set in settings, just show the welcome tab
+        try:
+            ws = getattr(self.settings, 'workspace', {})
+            last = ws.get('last_workspace') if ws else None
+            if not last:
+                # Ensure welcome tab is visible
+                self.create_welcome_tab()
+                return  # Let user interact with the welcome tab instead
+        except Exception:
+            pass
         
     def apply_theme(self):
         """Apply the current theme from settings with proper paint handling."""
@@ -324,6 +370,11 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(0, self.update)
 
     def new_file(self):
+        # If a welcome tab is present, remove it when creating a real editor
+        try:
+            self.remove_welcome_tab()
+        except Exception:
+            pass
         editor = EditorWidget(self.settings)
         idx = self.tab_widget.addTab(editor, "Untitled")
         # apply custom close button if available
@@ -369,6 +420,12 @@ class MainWindow(QMainWindow):
                     except Exception:
                         pass
                     return
+
+            # remove welcome tab if present
+            try:
+                self.remove_welcome_tab()
+            except Exception:
+                pass
 
             with open(file_path, 'r', encoding='utf-8') as file:
                 content = file.read()
@@ -448,8 +505,13 @@ class MainWindow(QMainWindow):
     def close_tab(self, index):
         # Add check for unsaved changes here
         self.tab_widget.removeTab(index)
+        # If no tabs remain, show the welcome tab (instructions) rather than creating
+        # a default untitled editor.
         if self.tab_widget.count() == 0:
-            self.new_file()
+            try:
+                self.create_welcome_tab()
+            except Exception:
+                pass
 
     def show_find_dialog(self):
         editor = self.tab_widget.currentWidget()
@@ -495,51 +557,11 @@ class MainWindow(QMainWindow):
         pass
         
     def setup_file_browser(self):
-        self.file_browser = QDockWidget("Files", self)
-        self.file_browser.setAllowedAreas(
-            Qt.DockWidgetArea.LeftDockWidgetArea | 
-            Qt.DockWidgetArea.RightDockWidgetArea
-        )
-        
-        # Create file system model (import lazily because some PyQt6 builds expose it differently)
-        try:
-            from PyQt6.QtWidgets import QFileSystemModel
-        except Exception:
-            from PyQt6.QtCore import QFileSystemModel
-        self.file_system = QFileSystemModel()
-        self.file_system.setRootPath(QDir.currentPath())
-        
-        # Create tree view
-        self.tree_view = QTreeView()
-        self.tree_view.setModel(self.file_system)
-        self.tree_view.setRootIndex(
-            self.file_system.index(QDir.currentPath())
-        )
-        self.tree_view.hideColumn(1)  # Size
-        self.tree_view.hideColumn(2)  # Type
-        self.tree_view.hideColumn(3)  # Date Modified
-        
-        # Single-click to open files (more responsive UX)
-        try:
-            self.tree_view.clicked.connect(self.open_from_browser)
-        except Exception:
-            self.tree_view.doubleClicked.connect(self.open_from_browser)
-        
-        self.file_browser.setWidget(self.tree_view)
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.file_browser)
-        
+        # delegate to helper module
+        create_file_browser(self)
     def setup_status_bar(self):
-        self.status_bar = QStatusBar()
-        self.setStatusBar(self.status_bar)
-        
-        # Add permanent widgets
-        self.line_col_label = QLabel("Line: 1, Col: 1")
-        self.encoding_label = QLabel("UTF-8")
-        self.syntax_label = QLabel("Plain Text")
-        
-        self.status_bar.addPermanentWidget(self.line_col_label)
-        self.status_bar.addPermanentWidget(self.encoding_label)
-        self.status_bar.addPermanentWidget(self.syntax_label)
+        # Delegate to main_statusbar helper for clarity
+        create_status_bar(self)
         
     def update_status_bar(self):
         # status bar widgets may not be created yet
@@ -705,6 +727,21 @@ class MainWindow(QMainWindow):
         if not folder:
             return
         self.workspace_root = folder
+        # persist workspace in settings recent list
+        try:
+            ws = getattr(self.settings, 'workspace', {}) or {}
+            ws['last_workspace'] = folder
+            recent = ws.get('recent', []) or []
+            # prepend and dedupe while preserving order
+            if folder in recent:
+                recent.remove(folder)
+            recent.insert(0, folder)
+            # keep up to 10 entries
+            ws['recent'] = recent[:10]
+            self.settings.workspace = ws
+            self.settings.save()
+        except Exception:
+            pass
         # update model depending on type
         if getattr(self, '_fs_model_type', 'native') == 'native':
             try:
@@ -745,71 +782,11 @@ class MainWindow(QMainWindow):
                     pass
 
     def setup_file_browser(self):
-        # existing setup preserved above; enable context menu
-        self.file_browser = QDockWidget("Files", self)
-        self.file_browser.setAllowedAreas(
-            Qt.DockWidgetArea.LeftDockWidgetArea | 
-            Qt.DockWidgetArea.RightDockWidgetArea
-        )
-        
-        # Create file system model (import lazily for compatibility)
+        # delegate to central file-browser creator
         try:
-            from PyQt6.QtWidgets import QFileSystemModel
-            self.file_system = QFileSystemModel()
-            self.file_system.setRootPath(QDir.currentPath())
-            # Create tree view
-            self.tree_view = QTreeView()
-            self.tree_view.setModel(self.file_system)
-            self.tree_view.setRootIndex(self.file_system.index(QDir.currentPath()))
-            self._fs_model_type = 'native'
+            create_file_browser(self)
         except Exception:
-            # Fallback: build a simple tree model using QStandardItemModel
-            from PyQt6.QtGui import QStandardItemModel, QStandardItem
-            self._fs_model_type = 'custom'
-            model = QStandardItemModel()
-            model.setHorizontalHeaderLabels(['Name'])
-            root_item = model.invisibleRootItem()
-            def add_children(parent_item, path):
-                try:
-                    for name in sorted(os.listdir(path)):
-                        full = os.path.join(path, name)
-                        item = QStandardItem(name)
-                        item.setData(full, Qt.ItemDataRole.UserRole)
-                        parent_item.appendRow(item)
-                        if os.path.isdir(full):
-                            add_children(item, full)
-                except Exception:
-                    pass
-            add_children(root_item, QDir.currentPath())
-            self.tree_view = QTreeView()
-            self.tree_view.setModel(model)
-            # make items slightly smaller and compact
-            try:
-                from PyQt6.QtCore import QSize
-                self.tree_view.setIconSize(QSize(14, 14))
-                self.tree_view.setStyleSheet('QTreeView::item { padding: 4px 6px; }')
-            except Exception:
-                pass
-            self.file_system = model
-        self.tree_view.hideColumn(1)  # Size
-        self.tree_view.hideColumn(2)  # Type
-        self.tree_view.hideColumn(3)  # Date Modified
-        
-        # connect single-click open for native model too
-        try:
-            self.tree_view.clicked.connect(self.open_from_browser)
-        except Exception:
-            self.tree_view.doubleClicked.connect(self.open_from_browser)
-        # enable right-click context menu
-        self.tree_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.tree_view.customContextMenuRequested.connect(self.on_file_tree_context_menu)
-        
-        self.file_browser.setWidget(self.tree_view)
-        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self.file_browser)
-        # slightly animate opening/closing via QTimer hooks when toggled
-        try:
-            self.file_browser.visibilityChanged.connect(lambda visible: None)
-        except Exception:
+            # keep fallback silent; the original code attempted several strategies
             pass
 
     def on_file_tree_context_menu(self, pos):

@@ -1,9 +1,11 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QDialog, QLineEdit, QPushButton, QLabel, QMenu
 from PyQt6.QtGui import QFont, QColor, QTextCharFormat, QKeySequence
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QThreadPool
 from PyQt6.Qsci import (QsciScintilla, QsciLexerPython, QsciLexerJavaScript,
                        QsciLexerHTML, QsciLexerCSS, QsciLexerXML, QsciLexerSQL,
                        QsciLexerJSON, QsciLexerYAML, QsciLexerMarkdown)
+import os
+
 try:
     from PyQt6.Qsci import QsciLexerLua
 except Exception:
@@ -25,6 +27,8 @@ from types import SimpleNamespace
 
 class EditorWidget(QsciScintilla):
     content_changed = pyqtSignal()
+    cursor_position_changed = pyqtSignal(int, int)  # line, column
+    selection_changed = pyqtSignal()
     
     LEXERS = {
         'py': QsciLexerPython,
@@ -38,6 +42,20 @@ class EditorWidget(QsciScintilla):
         'yaml': QsciLexerYAML,
         'yml': QsciLexerYAML,
         'md': QsciLexerMarkdown
+    }
+    
+    # Enhanced editor features
+    FEATURES = {
+        'minimap': True,
+        'line_numbers': True,
+        'highlight_current_line': True,
+        'auto_indent': True,
+        'bracket_matching': True,
+        'code_folding': True,
+        'word_wrap': False,
+        'show_whitespace': False,
+        'tab_width': 4,
+        'use_tabs': False
     }
 
     if QsciLexerLua:
@@ -57,37 +75,191 @@ class EditorWidget(QsciScintilla):
                 'font_size': 10,
                 'tab_size': 4,
                 'auto_save': False,
-                'show_line_numbers': True
+                'show_line_numbers': True,
+                'show_minimap': True,
+                'auto_format': True,
+                'live_preview': True
             },
             interface={},
             file_monitor={}
         )
         self.settings = settings or default
+        
+        # Set up timers
         self.auto_save_timer = QTimer()
         self.auto_save_timer.timeout.connect(self.auto_save)
-        self.setup_editor()
-        self.setup_autocomplete()
-        self.setup_context_menu()
-        # apply initial settings
-        try:
-            self.apply_settings()
-        except Exception:
-            pass
         
-        # Connect signals
-        try:
-            self.textChanged.connect(self._on_text_changed_debounced)
-        except Exception:
-            pass
-
-        # syntax checking debounce timer
         self._syntax_timer = QTimer()
         self._syntax_timer.setSingleShot(True)
         self._syntax_timer.timeout.connect(self.check_syntax)
         
+        self._format_timer = QTimer()
+        self._format_timer.setSingleShot(True)
+        self._format_timer.timeout.connect(self.format_code)
+        
+        # Setup core features
+        self.setup_editor()
+        self.setup_autocomplete()
+        self.setup_context_menu()
+        self.setup_minimap()
+        self.setup_git_integration()
+        self.setup_web_preview()
+        
+        # Initialize managers
+        from core.code_analyzer import CodeAnalyzer
+        from core.code_formatter import CodeFormatter
+        from core.git_manager import GitManager
+        from core.web_preview import WebPreviewManager
+        
+        self.analyzer = CodeAnalyzer(self.text(), getattr(self, 'file_path', ''))
+        self.formatter = CodeFormatter(self.text())
+        self.git_manager = GitManager(os.path.dirname(getattr(self, 'file_path', '')))
+        self.web_preview = WebPreviewManager(self)
+        
+        # Connect signals
+        self.textChanged.connect(self._on_text_changed)
+        self.analyzer.signals.issues_found.connect(self._on_issues_found)
+        self.formatter.signals.format_ready.connect(self._on_format_ready)
+        self.web_preview.preview_updated.connect(self._on_preview_updated)
+        
+        # Apply initial settings
+        self.apply_settings()
+        
         # Initialize theme
         self.update_theme()
         
+    def setup_minimap(self):
+        """Set up the code minimap."""
+        if self.settings.editor.get('show_minimap', True):
+            # Enable minimap using QScintilla's built-in features
+            self.setMarginsBackgroundColor(QColor("#f0f0f0"))
+            self.setMarginWidth(1, 50)  # Set margin width for line numbers
+            self.setMarginWidth(2, 15)  # Set margin width for minimap
+            self.setMarginType(2, QsciScintilla.MarginType.SymbolMargin)
+            self.setMarginSensitivity(2, True)
+            self.setMarginMarkerMask(2, 0x7FFFFFFF)  # Use max 32-bit signed integer
+
+    def setup_git_integration(self):
+        """Set up Git integration features."""
+        if not hasattr(self, 'file_path'):
+            return
+            
+        # Create Git manager if in a git repo
+        self.git_manager = GitManager(os.path.dirname(self.file_path))
+        if self.git_manager.is_git_repo():
+            # Add git status markers in the margin
+            self.setMarginType(3, QsciScintilla.MarginType.SymbolMargin)
+            self.setMarginWidth(3, 10)
+            self.setMarginMarkerMask(3, 0xFF)
+            
+            # Update git status
+            self.git_manager.status_changed.connect(self._update_git_markers)
+            self.git_manager.get_status()
+
+    def setup_web_preview(self):
+        """Set up web preview for HTML/CSS/JS files."""
+        if not hasattr(self, 'file_path'):
+            return
+            
+        ext = os.path.splitext(self.file_path)[1].lower()
+        if ext in ['.html', '.css', '.js'] and self.settings.editor.get('live_preview', True):
+            self.web_preview.set_editor(self)
+
+    def _on_text_changed(self):
+        """Handle text changes."""
+        self.content_changed.emit()
+        
+        # Schedule syntax check
+        self._syntax_timer.start(1000)  # Check syntax after 1 second of inactivity
+        
+        # Schedule code formatting if enabled
+        if self.settings.editor.get('auto_format', True):
+            self._format_timer.start(2000)  # Format after 2 seconds of inactivity
+        
+        # Update web preview if active
+        if hasattr(self, 'web_preview') and self.web_preview:
+            self.web_preview.update_preview()
+            
+        # Update git status
+        if hasattr(self, 'git_manager') and self.git_manager.is_git_repo():
+            self.git_manager.get_status()
+
+    def _on_issues_found(self, issues):
+        """Handle found code issues."""
+        # Clear existing markers
+        self.clearIndicators(0)
+        self.clearIndicators(1)
+        self.clearIndicators(2)
+        
+        # Set up indicators
+        self.indicatorDefine(QsciScintilla.INDIC_SQUIGGLE, 0)  # Error
+        self.indicatorDefine(QsciScintilla.INDIC_SQUIGGLE, 1)  # Warning
+        self.indicatorDefine(QsciScintilla.INDIC_SQUIGGLE, 2)  # Style
+        
+        self.setIndicatorForegroundColor(QColor("#ff0000"), 0)
+        self.setIndicatorForegroundColor(QColor("#ffaa00"), 1)
+        self.setIndicatorForegroundColor(QColor("#00aa00"), 2)
+        
+        # Apply indicators
+        for issue in issues:
+            line = issue['line'] - 1
+            col = issue['col']
+            length = 1  # Default length
+            
+            # Determine indicator based on issue type
+            indicator = 0  # Default to error
+            if issue['type'] == 'warning':
+                indicator = 1
+            elif issue['type'] == 'style':
+                indicator = 2
+                
+            # Mark the issue
+            pos = self.positionFromLineIndex(line, col)
+            self.fillIndicatorRange(line, col, line, col + length, indicator)
+
+    def _on_format_ready(self, formatted_code):
+        """Handle formatted code."""
+        if formatted_code != self.text():
+            current_pos = self.currentPosition()
+            self.setText(formatted_code)
+            self.setCurrentPosition(current_pos)
+
+    def _on_preview_updated(self):
+        """Handle web preview updates."""
+        pass  # The preview widget updates itself
+
+    def _update_git_markers(self, status):
+        """Update Git status markers in the margin."""
+        self.markerDeleteAll()
+        
+        if 'modified' in status:
+            for file in status['modified']:
+                if os.path.basename(file) == os.path.basename(self.file_path):
+                    # Mark modified lines
+                    current = self.text().split('\n')
+                    original = open(self.file_path, 'r').read().split('\n')
+                    for i, (curr, orig) in enumerate(zip(current, original)):
+                        if curr != orig:
+                            self.markerAdd(i, 1)  # Use marker 1 for modifications
+
+    def format_code(self):
+        """Format the current code."""
+        if not self.settings.editor.get('auto_format', True):
+            return
+            
+        # Get file extension
+        if not hasattr(self, 'file_path'):
+            return
+            
+        ext = os.path.splitext(self.file_path)[1].lower()
+        
+        # Only format Python files for now
+        if ext == '.py':
+            from core.code_formatter import CodeFormatter
+            formatter = CodeFormatter(self.text())
+            formatter.signals.format_ready.connect(self._on_format_ready)
+            QThreadPool.globalInstance().start(formatter)
+
     def update_theme(self, theme=None):
         """Update editor colors and styles based on theme."""
         try:
@@ -469,16 +641,12 @@ class EditorWidget(QsciScintilla):
             if ext.startswith('.'):
                 ext = ext[1:]
             
-            section(f"Lexer Setup for .{ext}")
-            
             # Get appropriate lexer class
             LexerClass = self.LEXERS.get(ext)
             if not LexerClass:
-                warning(f"No lexer available for .{ext} files")
                 return
                 
             # Create lexer instance and attach immediately so the editor can update UI promptly
-            debug(f"Creating {LexerClass.__name__} instance...")
             lexer = LexerClass(self)
             try:
                 # Attach basic lexer immediately (minimal work on main path)
@@ -494,22 +662,18 @@ class EditorWidget(QsciScintilla):
             from core.theme_manager import ThemeManager
             theme = ThemeManager().get_current_theme()
             colors = theme.colors
-            debug(f"Using theme: {theme.name}")
             
             try:
                 font_family = self.settings.editor.get('font_family', 'Consolas')
                 font_size = int(self.settings.editor.get('font_size', 12))
                 qfont = QFont(font_family, font_size)
                 qfont.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
-                info(f"Using font: {font_family} {font_size}pt")
             except Exception as e:
-                warning(f"Using default font due to error: {e}")
                 qfont = QFont('Consolas', 10)
             
             # Apply base colors (defer heavier styling so UI can remain responsive)
             bg_color = QColor(colors.get('editor_background', '#1E1E1E'))
             fg_color = QColor(colors.get('editor_foreground', '#D4D4D4'))
-            debug(f"Base colors - FG: {colors.get('editor_foreground')} BG: {colors.get('editor_background')}")
 
             # Quickly set some defaults on the lexer (safe operations)
             try:
@@ -526,11 +690,9 @@ class EditorWidget(QsciScintilla):
             def finish_lexer_config():
                 try:
                     if ext in ('py', 'pyw'):
-                        info("Configuring Python-specific lexer settings...")
                         from .lexers import python_lexer
                         python_lexer.apply_python_lexer(lexer, colors, qfont)
 
-                    debug("Finalizing lexer application")
                     # Ensure that the editor really has the lexer attached
                     try:
                         self.setLexer(lexer)
@@ -553,7 +715,7 @@ class EditorWidget(QsciScintilla):
             
             # success will be reported by deferred finalizer above; we keep a lightweight immediate check
             if self.lexer() is None:
-                error("Lexer not properly set (immediate check)")
+                warning("Initial lexer setup failed")
                 
         except Exception as e:
             error(f"Failed to set up lexer: {str(e)}")

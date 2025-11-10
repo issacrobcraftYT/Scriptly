@@ -1,5 +1,7 @@
-from PyQt6.QtCore import QPropertyAnimation, QEasingCurve, QRect, QPoint, QParallelAnimationGroup
-from PyQt6.QtWidgets import QWidget, QGraphicsOpacityEffect
+from PyQt6.QtCore import (QPropertyAnimation, QEasingCurve, QRect, QPoint, 
+                          QParallelAnimationGroup, QSequentialAnimationGroup, Qt)
+from PyQt6.QtWidgets import QWidget, QGraphicsOpacityEffect, QGraphicsBlurEffect
+from PyQt6.QtGui import QColor
 
 
 def fade_in(widget: QWidget, duration: int = 250):

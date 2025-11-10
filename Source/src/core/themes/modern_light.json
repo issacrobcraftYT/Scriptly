@@ -1,0 +1,27 @@
+{
+    "name": "Modern Light",
+    "version": "1.0.0",
+    "author": "Scriptly",
+    "colors": {
+        "background": "#ffffff",
+        "foreground": "#333333",
+        "selection": "#90caf9",
+        "cursor": "#333333",
+        "black": "#000000",
+        "red": "#e53935",
+        "green": "#43a047",
+        "yellow": "#fdd835",
+        "blue": "#1e88e5",
+        "magenta": "#8e24aa",
+        "cyan": "#00acc1",
+        "white": "#ffffff",
+        "brightBlack": "#757575",
+        "brightRed": "#ef5350",
+        "brightGreen": "#66bb6a",
+        "brightYellow": "#ffee58",
+        "brightBlue": "#42a5f5",
+        "brightMagenta": "#ab47bc",
+        "brightCyan": "#26c6da",
+        "brightWhite": "#ffffff"
+    }
+}

@@ -15,6 +15,148 @@ class SettingsDialog(QDialog):
         from .utils.animations import fade_in
         fade_in(self, duration=300)
         
+    def create_editor_tab(self):
+        tab = QWidget()
+        layout = QFormLayout()
+        
+        # Editor features group
+        features_group = QGroupBox("Editor Features")
+        features_layout = QVBoxLayout()
+        
+        self.minimap_cb = QCheckBox("Show Minimap")
+        self.line_numbers_cb = QCheckBox("Show Line Numbers")
+        self.highlight_line_cb = QCheckBox("Highlight Current Line")
+        self.auto_indent_cb = QCheckBox("Auto Indent")
+        self.bracket_matching_cb = QCheckBox("Bracket Matching")
+        self.code_folding_cb = QCheckBox("Code Folding")
+        self.word_wrap_cb = QCheckBox("Word Wrap")
+        self.show_whitespace_cb = QCheckBox("Show Whitespace")
+        
+        features_layout.addWidget(self.minimap_cb)
+        features_layout.addWidget(self.line_numbers_cb)
+        features_layout.addWidget(self.highlight_line_cb)
+        features_layout.addWidget(self.auto_indent_cb)
+        features_layout.addWidget(self.bracket_matching_cb)
+        features_layout.addWidget(self.code_folding_cb)
+        features_layout.addWidget(self.word_wrap_cb)
+        features_layout.addWidget(self.show_whitespace_cb)
+        features_group.setLayout(features_layout)
+        
+        layout.addRow(features_group)
+        tab.setLayout(layout)
+        return tab
+        
+    def create_theme_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        
+        # Theme selection
+        theme_group = QGroupBox("Theme")
+        theme_layout = QFormLayout()
+        
+        self.theme_combo = QComboBox()
+        self.color_scheme_combo = QComboBox()
+        
+        theme_layout.addRow("Theme:", self.theme_combo)
+        theme_layout.addRow("Color Scheme:", self.color_scheme_combo)
+        theme_group.setLayout(theme_layout)
+        
+        # Custom theme section
+        custom_group = QGroupBox("Custom Theme")
+        custom_layout = QVBoxLayout()
+        
+        custom_theme_btn = QPushButton("Create Custom Theme")
+        custom_theme_btn.clicked.connect(self.create_custom_theme)
+        custom_layout.addWidget(custom_theme_btn)
+        
+        import_theme_btn = QPushButton("Import Theme")
+        import_theme_btn.clicked.connect(self.import_theme)
+        custom_layout.addWidget(import_theme_btn)
+        
+        custom_group.setLayout(custom_layout)
+        
+        layout.addWidget(theme_group)
+        layout.addWidget(custom_group)
+        layout.addStretch()
+        
+        tab.setLayout(layout)
+        return tab
+        
+    def create_features_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        
+        # Auto-save group
+        autosave_group = QGroupBox("Auto-save")
+        autosave_layout = QFormLayout()
+        
+        self.autosave_cb = QCheckBox("Enable Auto-save")
+        self.autosave_interval = QSpinBox()
+        self.autosave_interval.setRange(1, 60)
+        self.autosave_interval.setSuffix(" minutes")
+        
+        autosave_layout.addRow(self.autosave_cb)
+        autosave_layout.addRow("Interval:", self.autosave_interval)
+        autosave_group.setLayout(autosave_layout)
+        
+        # Code completion group
+        completion_group = QGroupBox("Code Completion")
+        completion_layout = QVBoxLayout()
+        
+        self.autocomplete_cb = QCheckBox("Enable Code Completion")
+        self.snippets_cb = QCheckBox("Enable Snippets")
+        self.parameter_hints_cb = QCheckBox("Show Parameter Hints")
+        
+        completion_layout.addWidget(self.autocomplete_cb)
+        completion_layout.addWidget(self.snippets_cb)
+        completion_layout.addWidget(self.parameter_hints_cb)
+        completion_group.setLayout(completion_layout)
+        
+        layout.addWidget(autosave_group)
+        layout.addWidget(completion_group)
+        layout.addStretch()
+        
+        tab.setLayout(layout)
+        return tab
+        
+    def create_performance_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout()
+        
+        # File monitoring group
+        monitor_group = QGroupBox("File Monitoring")
+        monitor_layout = QFormLayout()
+        
+        self.file_monitor_cb = QCheckBox("Enable File Monitoring")
+        self.monitor_interval = QSpinBox()
+        self.monitor_interval.setRange(100, 5000)
+        self.monitor_interval.setSuffix(" ms")
+        
+        monitor_layout.addRow(self.file_monitor_cb)
+        monitor_layout.addRow("Check Interval:", self.monitor_interval)
+        monitor_group.setLayout(monitor_layout)
+        
+        # Memory usage group
+        memory_group = QGroupBox("Memory Usage")
+        memory_layout = QVBoxLayout()
+        
+        self.disk_cache_cb = QCheckBox("Enable Disk Cache")
+        self.memory_limit = QSpinBox()
+        self.memory_limit.setRange(128, 4096)
+        self.memory_limit.setSuffix(" MB")
+        
+        memory_layout.addWidget(self.disk_cache_cb)
+        memory_layout.addWidget(QLabel("Memory Limit:"))
+        memory_layout.addWidget(self.memory_limit)
+        memory_group.setLayout(memory_layout)
+        
+        layout.addWidget(monitor_group)
+        layout.addWidget(memory_group)
+        layout.addStretch()
+        
+        tab.setLayout(layout)
+        return tab
+    
     def setup_ui(self):
         from .utils.animations import slide_in
         
@@ -48,6 +190,22 @@ class SettingsDialog(QDialog):
         tabs = QTabWidget()
         tabs.setDocumentMode(True)
         tabs.setObjectName("settingsTabs")
+        
+        # Add Editor tab
+        editor_tab = self.create_editor_tab()
+        tabs.addTab(editor_tab, "Editor")
+        
+        # Add Theme tab
+        theme_tab = self.create_theme_tab()
+        tabs.addTab(theme_tab, "Theme")
+        
+        # Add Features tab
+        features_tab = self.create_features_tab()
+        tabs.addTab(features_tab, "Features")
+        
+        # Add Performance tab
+        performance_tab = self.create_performance_tab()
+        tabs.addTab(performance_tab, "Performance")
         
         # Add tabs with slide animation
         editor_tab = self.create_editor_tab()
@@ -182,22 +340,142 @@ class SettingsDialog(QDialog):
         theme_layout = QFormLayout()
         theme_layout.setContentsMargins(15, 20, 15, 15)
         theme_layout.setSpacing(10)
-        # Theme selection - populate from ThemeManager
+        
+        # Theme selection
         self.theme_name = QComboBox()
-        self.syntax_theme = QComboBox()
+        theme_layout.addRow("Application Theme:", self.theme_name)
+        
+        # Create user theme button
+        import_theme_btn = QPushButton("Import Theme")
+        theme_layout.addRow("", import_theme_btn)
+
         try:
             from core.theme_manager import ThemeManager
-            tm = ThemeManager()
-            names = tm.get_theme_names()
-            if not names:
-                names = ['modern_dark']
-            # populate both dropdowns with available themes
+            self.theme_manager = ThemeManager()
+            names = self.theme_manager.get_theme_names()
+            current_theme = self.settings.theme.get('name', 'modern_dark')
+            
+            # Populate theme dropdown
             for n in names:
                 pretty = n.replace('_', ' ').title()
                 self.theme_name.addItem(pretty, userData=n)
-                self.syntax_theme.addItem(pretty, userData=n)
-        except Exception:
-            # fallback
+                
+            # Set current theme
+            index = self.theme_name.findData(current_theme)
+            if index >= 0:
+                self.theme_name.setCurrentIndex(index)
+                
+            # Connect theme change handler
+            self.theme_name.currentIndexChanged.connect(self._on_theme_changed)
+            import_theme_btn.clicked.connect(self._on_import_theme)
+        except Exception as e:
+            print(f"Failed to initialize themes: {e}")
+            self.theme_name.addItem("Modern Dark", "modern_dark")
+            
+        theme_group.setLayout(theme_layout)
+        layout.addWidget(theme_group)
+        
+        # Help text
+        help_text = QLabel("Themes can be added by placing .qss and .json files in:\n"
+                          "- Built-in themes: src/core/themes/\n"
+                          "- User themes: ~/.scriptly/themes/\n"
+                          "See the themes/README.md for more information.")
+        help_text.setWordWrap(True)
+        help_text.setStyleSheet("color: gray;")
+        layout.addWidget(help_text)
+        
+        layout.addStretch()
+        widget.setLayout(layout)
+        return widget
+        
+    def _on_theme_changed(self, index):
+        theme_name = self.theme_name.currentData()
+        if theme_name:
+            self.settings.theme['name'] = theme_name
+            self.settings.save()
+            if hasattr(self.parent(), 'apply_theme'):
+                self.parent().apply_theme()
+                
+    def _on_import_theme(self):
+        from PyQt6.QtWidgets import QFileDialog
+        files, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Import Theme",
+            "",
+            "Theme Files (*.qss *.json);;All Files (*.*)"
+        )
+        if not files:
+            return
+            
+        for file in files:
+            try:
+                import shutil
+                from pathlib import Path
+                
+                # Create user themes directory if it doesn't exist
+                user_themes = Path.home() / ".scriptly" / "themes"
+                user_themes.mkdir(parents=True, exist_ok=True)
+                
+                # Copy theme file to user themes directory
+                src = Path(file)
+                dst = user_themes / src.name
+                shutil.copy2(src, dst)
+                
+                # If it's a .qss file, try to copy the matching .json if it exists
+                if src.suffix == '.qss':
+                    json_src = src.with_suffix('.json')
+                    if json_src.exists():
+                        json_dst = dst.with_suffix('.json')
+                        shutil.copy2(json_src, json_dst)
+                        
+                # Reload themes
+                if hasattr(self, 'theme_manager'):
+                    self.theme_manager.reload()
+                    
+                # Update theme dropdown
+                self.theme_name.clear()
+                for name in self.theme_manager.get_theme_names():
+                    pretty = name.replace('_', ' ').title()
+                    self.theme_name.addItem(pretty, userData=name)
+                    
+            except Exception as e:
+                from PyQt6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "Import Error", f"Failed to import theme: {e}")
+                
+        # Show success message if any files were imported
+        if files:
+            QMessageBox.information(self, "Success", "Themes imported successfully!")
+        # Theme selection - populate from ThemeManager
+        # Theme selection
+        self.theme_name = QComboBox()
+        theme_layout.addRow("Application Theme:", self.theme_name)
+        
+        # Create user theme button
+        import_theme_btn = QPushButton("Import Theme")
+        theme_layout.addRow("", import_theme_btn)
+
+        try:
+            from core.theme_manager import ThemeManager
+            self.theme_manager = ThemeManager()
+            names = self.theme_manager.get_theme_names()
+            current_theme = self.settings.value('theme/name', 'modern_dark')
+            
+            # Populate theme dropdown
+            for n in names:
+                pretty = n.replace('_', ' ').title()
+                self.theme_name.addItem(pretty, userData=n)
+                
+            # Set current theme
+            index = self.theme_name.findData(current_theme)
+            if index >= 0:
+                self.theme_name.setCurrentIndex(index)
+                
+            # Connect theme change handler
+            self.theme_name.currentIndexChanged.connect(self._on_theme_changed)
+            import_theme_btn.clicked.connect(self._on_import_theme)
+        except Exception as e:
+            print(f"Failed to initialize themes: {e}")
+            self.theme_name.addItem("Modern Dark", "modern_dark")
             self.theme_name.addItem('Modern Dark', userData='modern_dark')
             self.syntax_theme.addItem('Modern Dark', userData='modern_dark')
         self.syntax_theme.setEnabled(False)  # Locked to modern dark
@@ -272,12 +550,11 @@ print(greet('World'))  # Output: Hello, World!</code></pre>
         self.toolbar_visible.setChecked(self.settings.interface['toolbar_visible'])
         self.tab_position.setCurrentText(self.settings.interface['tab_position'].capitalize())
         
-        # Theme settings - enforce modern_dark
-        self.theme_name.setCurrentText("Modern Dark")
-        self.syntax_theme.setCurrentText("Modern Dark")
-        # Disable theme selection
-        self.theme_name.setEnabled(False)
-        self.syntax_theme.setEnabled(False)
+        # Theme settings
+        current_theme = self.settings.theme.get('name', 'modern_dark')
+        index = self.theme_name.findData(current_theme)
+        if index >= 0:
+            self.theme_name.setCurrentIndex(index)
         
     def save_settings(self):
         # Editor settings
@@ -302,21 +579,12 @@ print(greet('World'))  # Output: Hello, World!</code></pre>
         self.settings.interface['toolbar_visible'] = self.toolbar_visible.isChecked()
         self.settings.interface['tab_position'] = self.tab_position.currentText().lower()
         
-        # Theme settings - force modern_dark
-        self.settings.theme['name'] = 'modern_dark'
-        self.settings.theme['syntax_theme'] = 'modern_dark'
+        # Theme settings
+        self.settings.theme['name'] = self.theme_name.currentData()
         
         # Apply theme changes immediately
-        try:
-            from core.theme_manager import ThemeManager
-            tm = ThemeManager()
-            tm.set_theme('modern_dark')
-            
-            # Apply to parent widget if possible
-            if self.parent():
-                self.parent().setStyleSheet(tm.get_current_theme().get_stylesheet())
-        except Exception as e:
-            print(f"Error applying theme changes: {e}")
+        if self.parent() and hasattr(self.parent(), 'apply_theme'):
+            self.parent().apply_theme()
         
         self.settings.save()
 

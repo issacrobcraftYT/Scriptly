@@ -4,3 +4,4 @@ Installer/scriptly-setup.py
 Installer/ico.ico
 uninstaller/uninstaller.py
 uninstaller/ico.ico
+.vscode/

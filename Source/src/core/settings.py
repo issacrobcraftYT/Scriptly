@@ -52,6 +52,11 @@ class Settings:
                 'decrease_font': 'Ctrl+-',
                 'toggle_file_browser': 'Ctrl+B'
             }
+            ,
+            'workspace': {
+                'last_workspace': '',
+                'recent': []
+            }
         }
         
     def load(self):
@@ -64,6 +69,7 @@ class Settings:
         self.file_monitor = self.settings.value('file_monitor', self.defaults['file_monitor'])
         self.interface = self.settings.value('interface', self.defaults['interface'])
         self.shortcuts = self.settings.value('shortcuts', self.defaults['shortcuts'])
+        self.workspace = self.settings.value('workspace', self.defaults['workspace'])
         
     def save(self):
         self.settings.setValue('editor', self.editor)
@@ -71,6 +77,7 @@ class Settings:
         self.settings.setValue('file_monitor', self.file_monitor)
         self.settings.setValue('interface', self.interface)
         self.settings.setValue('shortcuts', self.shortcuts)
+        self.settings.setValue('workspace', self.workspace)
         self.settings.sync()
 
     def reset_to_defaults(self):

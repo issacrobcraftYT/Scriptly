@@ -1,6 +1,8 @@
 import jedi
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QTimer, QThreadPool, QObject, pyqtSignal
 from core.completion_worker import CompletionWorker
+import os
+from pathlib import Path
 
 
 class AutoCompleter:
@@ -11,6 +13,23 @@ class AutoCompleter:
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._dispatch_complete)
         self._worker = None
+        self._thread_pool = QThreadPool()
+        self._thread_pool.setMaxThreadCount(4)  # Limit concurrent completion threads
+        
+        # Initialize snippets
+        self.snippets = {
+            'def': 'def ${1:function_name}(${2:parameters}):\n\t${3:pass}',
+            'class': 'class ${1:ClassName}:\n\t${2:pass}',
+            'if': 'if ${1:condition}:\n\t${2:pass}',
+            'for': 'for ${1:item} in ${2:iterable}:\n\t${3:pass}',
+            'while': 'while ${1:condition}:\n\t${2:pass}',
+            'try': 'try:\n\t${1:pass}\nexcept ${2:Exception} as ${3:e}:\n\t${4:pass}',
+            'with': 'with ${1:expression} as ${2:target}:\n\t${3:pass}',
+            'import': 'import ${1:module}',
+            'from': 'from ${1:module} import ${2:name}',
+            'print': 'print(${1:object})',
+            'return': 'return ${1:object}',
+        }
 
     def update_completions(self, delay=150):
         # schedule completion after a short debounce interval

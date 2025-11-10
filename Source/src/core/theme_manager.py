@@ -1,8 +1,14 @@
+import sys
 import os
-import json
 from pathlib import Path
+import json
 from typing import Dict, Optional
 
+def resource_path(relative_path: str) -> str:
+    """Devuelve ruta válida tanto en ejecución normal como compilada."""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
 
 class Theme:
     """Represents a theme discovered on disk.
@@ -40,13 +46,57 @@ class ThemeManager:
     def __init__(self):
         self.themes: Dict[str, Theme] = {}
         self.current_theme: Optional[str] = None
+        self.active_color_scheme = None
         self._load_themes()
+        self._init_color_schemes()
+
+    def _init_color_schemes(self):
+        """Initialize predefined color schemes for syntax highlighting."""
+        self.color_schemes = {
+            'default': {
+                'background': '#2b2b2b',
+                'foreground': '#a9b7c6',
+                'keywords': '#cc7832',
+                'strings': '#6a8759',
+                'comments': '#808080',
+                'numbers': '#6897bb',
+                'functions': '#ffc66d',
+                'classes': '#a9b7c6',
+                'operators': '#cc7832',
+                'brackets': '#a9b7c6',
+                'selection_bg': '#214283',
+                'current_line': '#323232'
+            },
+            'light': {
+                'background': '#ffffff',
+                'foreground': '#000000',
+                'keywords': '#0033b3',
+                'strings': '#067d17',
+                'comments': '#8c8c8c',
+                'numbers': '#1750eb',
+                'functions': '#00627a',
+                'classes': '#000000',
+                'operators': '#0033b3',
+                'brackets': '#000000',
+                'selection_bg': '#add6ff',
+                'current_line': '#f5f5f5'
+            }
+        }
+        self.active_color_scheme = 'default'
 
     def _load_themes(self):
         """Discover and load all available .qss themes, prefer modern_dark as default."""
-        base = Path(__file__).parent / "themes"
-        if not base.exists():
-            return
+        # Look for themes in multiple locations
+        theme_paths = [
+            Path(__file__).parent / "themes",  # Built-in themes
+            Path("themes"),  # Themes in application directory
+            Path.home() / ".scriptly" / "themes",  # User custom themes
+            Path.home() / ".scriptly" / "themes"  # User themes
+        ]
+        
+        for base in theme_paths:
+            if not base.exists():
+                continue
 
         # Discover all .qss files
         for qss in sorted(base.glob("*.qss")):
@@ -94,7 +144,7 @@ class ThemeManager:
 
         Returns the created Theme object.
         """
-        base = Path(__file__).parent / "themes"
+        base = Path(resource_path("src/core/themes"))
         base.mkdir(parents=True, exist_ok=True)
         safe_name = name.strip().replace(" ", "_")
         qss_path = base / f"{safe_name}.qss"
@@ -188,30 +238,50 @@ class ThemeManager:
 
     def _load_themes(self):
         """Discover and load all available .qss themes, prefer modern_dark as default."""
-        base = Path(__file__).parent / 'themes'
-        if not base.exists():
+    
+        # función que resuelve la ruta compatible con PyInstaller
+        def resource_path(relative_path: str) -> str:
+            import sys, os
+            if hasattr(sys, '_MEIPASS'):
+                return os.path.join(sys._MEIPASS, relative_path)
+            return os.path.join(os.path.abspath("."), relative_path)
+
+        # detecta todas las posibles ubicaciones
+        possible_dirs = [
+            Path(resource_path("src/core/themes")), 
+            Path(resource_path("core/themes")),   
+            Path(resource_path("themes")),      
+        ]
+
+        base = None
+        for d in possible_dirs:
+            if d.exists():
+                base = d
+                break
+
+        if base is None:
             return
 
-        # Discover all .qss files
-        for qss in sorted(base.glob('*.qss')):
+        # carga los temas
+        for qss in sorted(base.glob("*.qss")):
             name = qss.stem
-            json_path = qss.with_suffix('.json')
+            json_path = qss.with_suffix(".json")
             colors = None
             if json_path.exists():
                 try:
-                    with open(json_path, 'r', encoding='utf-8') as jf:
+                    with open(json_path, "r", encoding="utf-8") as jf:
                         colors = json.load(jf)
                 except Exception as e:
-                    # non-fatal; continue without colors
                     print(f"Warning: failed to load colors for theme {name}: {e}")
-                    colors = None
             self.themes[name] = Theme(name, qss, colors)
 
-        # Prefer modern_dark if present, otherwise first theme
-        if 'modern_dark' in self.themes:
-            self.current_theme = 'modern_dark'
+        # establece el tema actual
+        if "modern_dark" in self.themes:
+            self.current_theme = "modern_dark"
         elif self.themes:
             self.current_theme = next(iter(self.themes))
+        else:+
+            print("⚠️ No themes found at runtime.")
 
     def get_current_theme(self) -> Theme:
         if not self.current_theme:
